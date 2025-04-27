@@ -2,183 +2,136 @@
 setlocal ENABLEDELAYEDEXPANSION
 
 echo =========================================
-echo  🚀 Windows Full Network Optimizer Launcher
-echo  Target: 1Gbps Fiber Internet + Developers
+echo  🚀  Windows Full Network Optimizer Launcher
+echo  Target: 1 Gbps / Fiber connections  
 echo =========================================
 echo.
 
-:: Step 1: Create temp directory
-set "tempDir=%TEMP%\WinNetOptimizer"
-set "psFile=%tempDir%\Optimize-WindowsNetwork.ps1"
-mkdir "%tempDir%" >nul 2>&1
-
-:: Step 2: Write the full advanced PowerShell optimization script
-echo 📄 Creating advanced optimization script...
-(
-echo # Super Windows Network Optimizer
-echo function main {
-echo param(
-echo     [switch]$EnablePacing,
-echo     [switch]$RebootAfter,
-echo     [switch]$Rollback
-echo ^)
-echo.
-echo Write-Host "🚀 Starting Windows Network Optimization..." -ForegroundColor Cyan
-echo.
-echo $adapters = Get-NetAdapter ^| Where-Object { $_.Status -eq "Up" }
-echo if (-not $adapters) { Write-Host "❌ No active network adapters found!" -ForegroundColor Red; exit 1 }
-echo if ($adapters.Count -gt 1) {
-echo     Write-Host "⚡ Multiple active adapters detected:"
-echo     $i = 1
-echo     foreach ($adapterOption in $adapters) { Write-Host "$i. $($adapterOption.Name) ($($adapterOption.InterfaceDescription))"; $i++ }
-echo     $selection = Read-Host "Select adapter number to optimize"
-echo     $adapter = $adapters[($selection - 1)]
-echo } else {
-echo     $adapter = $adapters[0]
-echo }
-echo Write-Host "✅ Active adapter selected: $($adapter.Name)" -ForegroundColor Green
-echo.
-echo if ($Rollback) {
-echo     Undo-Optimizations -adapter $adapter
-echo     exit
-echo }
-echo.
-echo Test-NetworkPerformance
-echo.
-echo # Backup Registry
-echo try {
-echo     reg export "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" "%tempDir%\Tcpip-Parameters-Backup.reg" /y
-echo     reg export "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" "%tempDir%\Tcpip-Interfaces-Backup.reg" /y
-echo     Write-Host "✅ Registry backup complete" -ForegroundColor Green
-echo } catch {
-echo     Write-Host "⚠️ Registry backup failed, continuing..." -ForegroundColor Yellow
-echo }
-echo.
-echo # Disable IPv6
-echo $ipv6Binding = Get-NetAdapterBinding -Name $adapter.Name -ComponentID ms_tcpip6
-echo if ($ipv6Binding.Enabled) {
-echo     Disable-NetAdapterBinding -Name $adapter.Name -ComponentID ms_tcpip6
-echo     Write-Host "✅ IPv6 disabled" -ForegroundColor Green
-echo }
-echo.
-echo # MTU and TCP Stack Tuning
-echo netsh interface ipv4 set subinterface "$($adapter.Name)" mtu=1500 store=persistent
-echo netsh interface tcp set global autotuninglevel=normal
-echo netsh interface tcp set heuristics disabled
-echo netsh interface tcp set global rss=enabled
-echo netsh interface tcp set global rsc=enabled
-echo netsh interface tcp set global ecncapability=disabled
-echo netsh interface tcp set global fastopen=enabled
-echo netsh interface tcp set global fastopenfallback=enabled
-echo New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "InitialRto" -PropertyType DWord -Value 200 -Force
-echo.
-echo if ($EnablePacing) {
-echo     netsh interface tcp set global pacingprofile=initialwindow
-echo     Write-Host "✅ TCP pacing enabled" -ForegroundColor Green
-echo } else {
-echo     netsh interface tcp set global pacingprofile=off
-echo }
-echo.
-echo # Disable Nagle + Delayed ACK
-echo $adapterGUIDs = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" ^| Select-Object -ExpandProperty PSChildName
-echo foreach ($guid in $adapterGUIDs) {
-echo     New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid" -Name "TcpAckFrequency" -PropertyType DWord -Value 1 -Force
-echo     New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid" -Name "TCPNoDelay" -PropertyType DWord -Value 1 -Force
-echo     New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid" -Name "TcpDelAckTicks" -PropertyType DWord -Value 0 -Force
-echo }
-echo.
-echo # NIC Driver Level Tuning
-echo try {
-echo     Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Interrupt Moderation" -DisplayValue "Disabled" -NoRestart -ErrorAction SilentlyContinue
-echo     Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Flow Control" -DisplayValue "Rx & Tx Enabled" -NoRestart -ErrorAction SilentlyContinue
-echo     Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Receive Buffers" -DisplayValue "512" -NoRestart -ErrorAction SilentlyContinue
-echo     Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Transmit Buffers" -DisplayValue "512" -NoRestart -ErrorAction SilentlyContinue
-echo     Write-Host "✅ NIC tuning applied" -ForegroundColor Green
-echo } catch {
-echo     Write-Host "⚠️ NIC tuning not supported" -ForegroundColor Yellow
-echo }
-echo.
-echo # Disable unnecessary services
-echo $servicesToDisable = @("Spooler", "DiagTrack", "dmwappushservice", "WMPNetworkSvc", "XblGameSave")
-echo foreach ($service in $servicesToDisable) {
-echo     try {
-echo         Stop-Service -Name $service -ErrorAction SilentlyContinue
-echo         Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-echo     } catch {}
-echo }
-echo Write-Host "✅ Unnecessary services disabled" -ForegroundColor Green
-echo.
-echo # High Performance Power Plan
-echo powercfg -setactive SCHEME_MIN
-echo Write-Host "✅ Power Plan set to High Performance" -ForegroundColor Green
-echo.
-echo Test-NetworkPerformance
-echo.
-echo Write-Host "🎯 Optimization complete!" -ForegroundColor Green
-echo if ($RebootAfter) {
-echo     Restart-Computer -Force
-echo } else {
-echo     Write-Host "⚡ Please reboot manually for full effect." -ForegroundColor Yellow
-echo }
-echo }
-echo.
-echo function Undo-Optimizations {
-echo param($adapter)
-echo.
-echo Write-Host "🔄 Rolling back optimizations..." -ForegroundColor Yellow
-echo Enable-NetAdapterBinding -Name $adapter.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
-echo netsh interface tcp set global autotuninglevel=normal
-echo netsh interface tcp set heuristics enabled
-echo netsh interface tcp set global rss=enabled
-echo netsh interface tcp set global rsc=disabled
-echo netsh interface tcp set global ecncapability=enabled
-echo netsh interface tcp set global fastopen=disabled
-echo netsh interface tcp set global pacingprofile=off
-echo Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "InitialRto" -ErrorAction SilentlyContinue
-echo.
-echo $servicesToEnable = @("Spooler", "DiagTrack", "dmwappushservice", "WMPNetworkSvc", "XblGameSave")
-echo foreach ($service in $servicesToEnable) {
-echo     Set-Service -Name $service -StartupType Manual -ErrorAction SilentlyContinue
-echo }
-echo Write-Host "✅ Rollback complete. Please reboot manually." -ForegroundColor Green
-echo }
-echo.
-echo function Test-NetworkPerformance {
-echo Write-Host "📊 Running basic network performance test..." -ForegroundColor Cyan
-echo $ping = Test-Connection -ComputerName "8.8.8.8" -Count 4 -ErrorAction SilentlyContinue
-echo $avgLatency = ($ping ^| Measure-Object -Property ResponseTime -Average).Average
-echo Write-Host "🏓 Average latency to 8.8.8.8: $avgLatency ms" -ForegroundColor Green
-echo }
-echo.
-echo main @PSBoundParameters
-) > "%psFile%"
-
-:: Step 3: Find best available PowerShell (pwsh or powershell.exe)
+:: ------------------------------------------------------------------
+:: 1 – detect PowerShell host (pwsh ► powershell) – abort only if none
+:: ------------------------------------------------------------------
 set "foundShell="
-
-where pwsh.exe >nul 2>&1
-if not errorlevel 1 (
-    set "foundShell=pwsh.exe"
-) else (
-    where powershell.exe >nul 2>&1
-    if not errorlevel 1 (
-        set "foundShell=powershell.exe"
-    )
+where pwsh.exe    >nul 2>&1 && set "foundShell=pwsh.exe"
+if not defined foundShell (
+    where powershell.exe >nul 2>&1 && set "foundShell=powershell.exe"
+)
+if not defined foundShell (
+    echo ❌  PowerShell 5.1+ or 7+ is required. Install it and rerun.
+    goto :END
 )
 
-if "%foundShell%"=="" (
-    echo ❌ No PowerShell found! Install PowerShell 5.1+ or 7+ and try again.
-    exit /b 1
+:: ------------------------------------------------------------------
+:: 2 – create temp folder & write full advanced PS script in one shot
+:: ------------------------------------------------------------------
+set "tmpDir=%TEMP%\WinNetOptimizer"
+set "psFile=%tmpDir%\Optimize-WindowsNetwork.ps1"
+if not exist "%tmpDir%" md "%tmpDir%"
+
+echo 📄  Writing optimizer script to %psFile% …
+%foundShell% -NoProfile -Command ^
+"$code=@'
+<#
+  Super Windows Network Optimizer  (v1.0.1, full)
+  – registry backup / rollback
+  – MTU 1500  – TCP stack tuning
+  – IPv6 disable  – Nagle / Delayed-ACK off
+  – optional pacing  – NIC driver tweaks
+  – service trim  – High-Performance power
+#>
+param([switch]$EnablePacing,[switch]$RebootAfter,[switch]$Rollback)
+
+function Test-Ping {
+  try {
+    \$r=(Test-Connection 8.8.8.8 -Count 4 -ErrorAction Stop|
+        Measure-Object -Property ResponseTime -Average).Average
+    Write-Host \"🏓 Avg latency 8.8.8.8 = \$r ms\" -fo Green
+  }catch{Write-Host '↯ Ping failed' -fo Yellow}
+}
+
+function Undo {
+ param(\$a)
+ Enable-NetAdapterBinding -Name \$a.Name -ComponentID ms_tcpip6 -ea SilentlyContinue
+ netsh int tcp set global autotuninglevel=normal
+ netsh int tcp set heuristics enabled
+ netsh int tcp set global rss=enabled rsc=disabled ecncapability=enabled fastopen=disabled pacingprofile=off
+ Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' -Name InitialRto -ea SilentlyContinue
+ 'Spooler','DiagTrack','dmwappushservice','WMPNetworkSvc','XblGameSave'|%{Set-Service $_ -StartupType Manual -ea SilentlyContinue}
+ Write-Host '✅ Rollback done – reboot.' -fo Green
+ exit
+}
+
+Write-Host '🚀 Optimizer starting…' -fo Cyan
+\$ad=(Get-NetAdapter|? Status -eq 'Up')
+if(!\$ad){Write-Host '❌ No active adapters.' -fo Red;exit}
+if(\$ad.Count -gt 1){
+ \$i=1;\$ad|%{Write-Host \"\$i. \$_.Name (\$_.InterfaceDescription)\"; \$i++}
+ \$sel=[int](Read-Host 'Select adapter number')-1
+ \$ad=\$ad[\$sel]
+}
+Write-Host \"✅ Using adapter: \$($ad.Name)\" -fo Green
+
+if(\$Rollback){Undo \$ad}
+
+Test-Ping
+reg export 'HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' \"\$env:TEMP\\Tcpip-Parameters-BACKUP.reg\" /y >\$null
+reg export 'HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' \"\$env:TEMP\\Tcpip-Interfaces-BACKUP.reg\" /y >\$null
+Write-Host '💾 Registry backup saved (%TEMP%)' -fo Green
+
+if((Get-NetAdapterBinding -Name \$ad.Name -ComponentID ms_tcpip6).Enabled){
+ Disable-NetAdapterBinding -Name \$ad.Name -ComponentID ms_tcpip6
+ Write-Host '↯ IPv6 disabled' -fo Yellow
+}
+netsh int ipv4 set subinterface \"\$([regex]::Escape(\$ad.Name))\" mtu=1500 store=persistent >\$null
+netsh int tcp set global autotuninglevel=normal heuristics=disabled rss=enabled rsc=enabled ecncapability=disabled fastopen=enabled fastopenfallback=enabled >\$null
+New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' -Name InitialRto -Type DWord -Value 200 -Force >\$null
+if(\$EnablePacing){netsh int tcp set global pacingprofile=initialwindow}
+
+(Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces').PsChildName|%{
+  \$k=\"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$_\"
+  New-ItemProperty \$k -Name TcpAckFrequency -Type DWord -Value 1 -Force >\$null
+  New-ItemProperty \$k -Name TCPNoDelay       -Type DWord -Value 1 -Force >\$null
+  New-ItemProperty \$k -Name TcpDelAckTicks   -Type DWord -Value 0 -Force >\$null
+}
+
+try{
+  Set-NetAdapterAdvancedProperty -Name \$ad.Name -DisplayName 'Interrupt Moderation' -DisplayValue 'Disabled' -NoRestart -ea Stop
+  Set-NetAdapterAdvancedProperty -Name \$ad.Name -DisplayName 'Flow Control' -DisplayValue 'Rx & Tx Enabled' -NoRestart -ea Stop
+  Set-NetAdapterAdvancedProperty -Name \$ad.Name -DisplayName 'Receive Buffers' -DisplayValue '512' -NoRestart -ea Stop
+  Set-NetAdapterAdvancedProperty -Name \$ad.Name -DisplayName 'Transmit Buffers' -DisplayValue '512' -NoRestart -ea Stop
+  Write-Host '🔧 NIC advanced tuning applied' -fo Green
+}catch{Write-Host '⚠️ NIC tuning skipped' -fo Yellow}
+
+'SPOOLER','DiagTrack','dmwappushservice','WMPNetworkSvc','XblGameSave'|%{
+  Stop-Service \$_-ea SilentlyContinue
+  Set-Service \$_ -StartupType Disabled -ea SilentlyContinue
+}
+Write-Host '🧹 Background services disabled' -fo Green
+
+powercfg -setactive SCHEME_MIN
+Write-Host '⚡ High-Performance power plan enabled' -fo Green
+
+Test-Ping
+Write-Host '🎯 Optimization complete! Reboot to feel it.' -fo Green
+if(\$RebootAfter){Restart-Computer -Force}
+'@; Set-Content -Path '%psFile%' -Value $code -Encoding UTF8"
+
+if errorlevel 1 (
+    echo ❌  Failed to create PowerShell script.  Aborting.
+    goto :END
 )
 
-:: Step 4: Launch
-echo 🚀 Running optimizer using %foundShell%...
+:: ------------------------------------------------------------------
+:: 3 – run the optimizer
+:: ------------------------------------------------------------------
+echo.&echo 🚀  Launching optimizer using %foundShell% …&echo.
 %foundShell% -NoProfile -ExecutionPolicy Bypass -File "%psFile%"
 
-:: Step 5: Final Message
+echo.&echo =========================================
+echo ✅  All done – *reboot* to unleash full gigabit speed.
+echo    Need rollback?  run:
+echo    %foundShell% -NoProfile -ExecutionPolicy Bypass -File "%psFile%" -Rollback
 echo =========================================
-echo ✅ Optimization finished! Please REBOOT to unleash full gigabit performance.
-echo    To rollback, re-run this with -Rollback.
-echo =========================================
-endlocal
+
+:END
 pause
+endlocal
